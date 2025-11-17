@@ -44,8 +44,8 @@ with tab1:
 
     if upload_method == "上传本地文件":
         uploaded_files = st.file_uploader(
-            "选择文件 (PDF, TXT, MD)",
-            type=["pdf", "txt", "md"],
+            "选择文件 (PDF, TXT, MD, DOCX, PPTX, EPUB)",
+            type=["pdf", "txt", "md", "docx", "pptx", "epub"],
             accept_multiple_files=True
         )
 

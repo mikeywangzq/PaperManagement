@@ -23,6 +23,9 @@ def get_document_type(file_path: str) -> Optional[DocumentType]:
         ".pdf": DocumentType.PDF,
         ".txt": DocumentType.TXT,
         ".md": DocumentType.MD,
+        ".docx": DocumentType.DOCX,
+        ".pptx": DocumentType.PPTX,
+        ".epub": DocumentType.EPUB,
     }
     return type_mapping.get(extension)
 

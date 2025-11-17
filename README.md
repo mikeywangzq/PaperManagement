@@ -314,7 +314,7 @@ streamlit run app.py
 **方式一：本地文件上传**
 1. 进入 `📄 论文总结` 页面
 2. 选择 **上传本地文件**
-3. 支持格式：`PDF` / `TXT` / `MD`
+3. 支持格式：`PDF` / `TXT` / `MD` / `DOCX` / `PPTX` / `EPUB`
 4. 点击 **处理文档** 开始解析
 
 **方式二：arXiv 直接导入**
@@ -589,20 +589,45 @@ rm -rf data/metadata/*
 
 <br>
 
-当前版本主要使用 OpenAI API，但可以通过修改代码支持本地模型：
+**现已支持 Ollama！** 🎉
 
-**计划支持的本地模型**：
-- 🦙 Ollama (LLaMA, Mistral等)
-- 🤗 Hugging Face Transformers
-- 💬 ChatGLM
+系统支持两种 LLM 提供商：
+1. **OpenAI** (默认) - 需要 API Key
+2. **Ollama** (本地) - 完全免费，隐私保护
 
-如需使用本地模型，可以修改 `backend/utils/llm_utils.py`：
+**使用 Ollama 的步骤**：
 
-```python
-# 使用 Ollama
-from langchain_community.llms import Ollama
-llm = Ollama(model="llama2")
-```
+1. **安装 Ollama**:
+   ```bash
+   # macOS/Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+
+   # Windows: 访问 ollama.com 下载安装
+   ```
+
+2. **下载模型**:
+   ```bash
+   ollama pull llama2
+   ollama pull nomic-embed-text
+   ```
+
+3. **配置系统**:
+   在 `.env` 文件中设置：
+   ```bash
+   LLM_PROVIDER=ollama
+   OLLAMA_MODEL=llama2
+   OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+   OLLAMA_BASE_URL=http://localhost:11434
+   ```
+
+4. **启动应用** - 系统将自动使用 Ollama！
+
+**支持的模型**：
+- 🦙 LLaMA 2, LLaMA 3
+- 🌟 Mistral, Mixtral
+- 💻 CodeLlama
+- 🔬 Phi, Gemma
+- 更多模型请访问 [ollama.com/library](https://ollama.com/library)
 
 </details>
 
@@ -636,12 +661,69 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 
 </details>
 
+<details>
+<summary><b>Q8: 如何使用用户认证功能？</b></summary>
+
+<br>
+
+系统内置了用户认证和权限管理系统：
+
+**默认账户**：
+- 管理员: `admin` / `admin123`
+- 普通用户: `demo` / `demo123`
+
+**修改密码**：
+编辑 `config/users.yaml` 文件（首次运行会自动生成）
+
+**添加新用户**：
+```yaml
+credentials:
+  usernames:
+    newuser:
+      name: "新用户"
+      password: "<SHA256-hashed-password>"
+      role: "user"  # 或 "admin"
+```
+
+**角色权限**：
+- 👤 **user**: 普通用户，访问所有功能
+- 👑 **admin**: 管理员，额外权限（未来扩展）
+
+⚠️ **生产环境**: 请务必修改默认密码！
+
+</details>
+
+<details>
+<summary><b>Q9: 如何切换语言？</b></summary>
+
+<br>
+
+系统支持 **中文** 🇨🇳 和 **英文** 🇬🇧 双语界面：
+
+**切换方法**：
+1. 打开任意页面
+2. 在左侧边栏找到"语言/Language"选择器
+3. 选择您需要的语言
+4. 页面将自动刷新并应用新语言
+
+**支持范围**：
+- ✅ 所有UI界面文本
+- ✅ 菜单和按钮
+- ✅ 提示信息
+- ⚠️ 文档内容保持原始语言（不自动翻译）
+
+**扩展其他语言**：
+可以在 `frontend/i18n.py` 中添加新语言翻译
+
+</details>
+
 ---
 
 ## 🗺️ 开发路线图
 
-### ✅ 已完成 (v0.1.0)
+### ✅ 已完成 (v0.1.0 - v0.3.0)
 
+**核心功能 (v0.1.0):**
 - [x] 🤖 基于 RAG 的智能问答系统
 - [x] 📄 论文自动摘要和分析
 - [x] 🏷️ 智能分类和标签系统
@@ -651,16 +733,18 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 - [x] 🔍 语义搜索引擎
 - [x] 📚 文档管理系统
 
-### 🔄 进行中 (v0.2.0)
+**增强功能 (v0.2.0):**
+- [x] 📊 支持更多文档格式 (DOCX, PPTX, EPUB)
+- [x] 🌐 多语言界面支持 (中英文切换)
+- [x] 📱 响应式移动端适配
 
-- [ ] 📊 支持更多文档格式 (DOCX, PPT, EPUB)
-- [ ] 🌐 多语言界面支持
-- [ ] 📱 响应式移动端适配
-- [ ] 🔐 用户认证和权限管理
+**高级功能 (v0.3.0):**
+- [x] 🦙 本地 LLM 支持 (Ollama)
+- [x] 🔐 用户认证和权限管理
+- [x] 👤 多用户角色系统
 
-### 🚀 计划中 (v0.3.0+)
+### 🚀 计划中 (v0.4.0+)
 
-- [ ] 🦙 本地 LLM 支持 (Ollama, LLaMA)
 - [ ] 👥 多用户协作功能
 - [ ] ☁️ 云端同步
 - [ ] 📥 批量导入导出
@@ -668,6 +752,8 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 - [ ] 📈 学习进度追踪
 - [ ] 🎨 自定义主题和样式
 - [ ] 🔌 插件系统
+- [ ] 🔄 文档版本控制
+- [ ] 📊 高级数据分析仪表板
 
 ---
 

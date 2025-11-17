@@ -7,6 +7,10 @@ from datetime import datetime
 
 import fitz  # PyMuPDF
 import arxiv
+from docx import Document as DocxDocument
+from pptx import Presentation
+from ebooklib import epub
+from bs4 import BeautifulSoup
 
 from backend.models.schemas import Document, DocumentType
 from backend.utils.file_utils import (
@@ -91,6 +95,147 @@ class DocumentProcessor:
             logger.error(f"Error processing text file {file_path}: {e}")
             raise
 
+    def process_docx(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract text and metadata from DOCX file.
+
+        Args:
+            file_path: Path to DOCX file
+
+        Returns:
+            Dictionary containing text and metadata
+        """
+        try:
+            doc = DocxDocument(file_path)
+            text_content = []
+
+            # Extract text from paragraphs
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_content.append(paragraph.text)
+
+            # Extract text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join([cell.text.strip() for cell in row.cells])
+                    if row_text.strip():
+                        text_content.append(row_text)
+
+            full_text = "\n\n".join(text_content)
+
+            # Extract metadata
+            core_properties = doc.core_properties
+            metadata = {
+                "title": core_properties.title or Path(file_path).stem,
+                "author": core_properties.author,
+                "subject": core_properties.subject,
+                "created": str(core_properties.created) if core_properties.created else None,
+                "modified": str(core_properties.modified) if core_properties.modified else None,
+            }
+
+            return {
+                "text": full_text,
+                "num_pages": None,  # DOCX doesn't have fixed pages
+                "metadata": metadata,
+                "title": metadata.get("title", Path(file_path).stem),
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing DOCX {file_path}: {e}")
+            raise
+
+    def process_pptx(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract text and metadata from PPTX file.
+
+        Args:
+            file_path: Path to PPTX file
+
+        Returns:
+            Dictionary containing text and metadata
+        """
+        try:
+            prs = Presentation(file_path)
+            text_content = []
+
+            # Extract text from all slides
+            for slide_num, slide in enumerate(prs.slides, 1):
+                slide_text = [f"=== Slide {slide_num} ==="]
+
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        slide_text.append(shape.text.strip())
+
+                if len(slide_text) > 1:  # More than just the header
+                    text_content.append("\n".join(slide_text))
+
+            full_text = "\n\n".join(text_content)
+
+            # Extract metadata
+            core_properties = prs.core_properties
+            metadata = {
+                "title": core_properties.title or Path(file_path).stem,
+                "author": core_properties.author,
+                "subject": core_properties.subject,
+                "created": str(core_properties.created) if core_properties.created else None,
+                "modified": str(core_properties.modified) if core_properties.modified else None,
+            }
+
+            return {
+                "text": full_text,
+                "num_pages": len(prs.slides),
+                "metadata": metadata,
+                "title": metadata.get("title", Path(file_path).stem),
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing PPTX {file_path}: {e}")
+            raise
+
+    def process_epub(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract text and metadata from EPUB file.
+
+        Args:
+            file_path: Path to EPUB file
+
+        Returns:
+            Dictionary containing text and metadata
+        """
+        try:
+            book = epub.read_epub(file_path)
+            text_content = []
+
+            # Extract text from all items
+            for item in book.get_items():
+                if item.get_type() == epub.ITEM_DOCUMENT:
+                    # Parse HTML content
+                    soup = BeautifulSoup(item.get_content(), 'html.parser')
+                    text = soup.get_text(separator='\n', strip=True)
+                    if text:
+                        text_content.append(text)
+
+            full_text = "\n\n".join(text_content)
+
+            # Extract metadata
+            metadata = {
+                "title": book.get_metadata('DC', 'title')[0][0] if book.get_metadata('DC', 'title') else Path(file_path).stem,
+                "author": book.get_metadata('DC', 'creator')[0][0] if book.get_metadata('DC', 'creator') else None,
+                "language": book.get_metadata('DC', 'language')[0][0] if book.get_metadata('DC', 'language') else None,
+                "publisher": book.get_metadata('DC', 'publisher')[0][0] if book.get_metadata('DC', 'publisher') else None,
+            }
+
+            return {
+                "text": full_text,
+                "num_pages": None,  # EPUB doesn't have fixed pages
+                "metadata": metadata,
+                "title": metadata.get("title", Path(file_path).stem),
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing EPUB {file_path}: {e}")
+            raise
+
     def process_arxiv(self, arxiv_id: str) -> Dict[str, Any]:
         """
         Download and process paper from arXiv.
@@ -164,7 +309,13 @@ class DocumentProcessor:
 
             if document_type == DocumentType.PDF:
                 result = self.process_pdf(file_path)
-            else:
+            elif document_type == DocumentType.DOCX:
+                result = self.process_docx(file_path)
+            elif document_type == DocumentType.PPTX:
+                result = self.process_pptx(file_path)
+            elif document_type == DocumentType.EPUB:
+                result = self.process_epub(file_path)
+            else:  # TXT, MD
                 result = self.process_text_file(file_path)
 
         # Generate document ID

@@ -31,11 +31,19 @@ class Settings(BaseSettings):
         extra="ignore"                    # 忽略额外的环境变量
     )
 
+    # ===== LLM Provider配置 =====
+    llm_provider: str = "openai"          # LLM提供商: "openai" 或 "ollama"
+
     # ===== OpenAI配置 =====
     openai_api_key: str = ""              # OpenAI API密钥 (必填)
     openai_api_base: str = "https://api.openai.com/v1"  # API基础URL
     embedding_model: str = "text-embedding-3-small"      # 向量化模型
     llm_model: str = "gpt-4-turbo-preview"              # 大语言模型
+
+    # ===== Ollama配置 =====
+    ollama_base_url: str = "http://localhost:11434"      # Ollama服务地址
+    ollama_model: str = "llama2"                         # Ollama模型名称
+    ollama_embedding_model: str = "nomic-embed-text"     # Ollama嵌入模型
 
     # ===== 文件路径配置 =====
     vector_db_path: str = "./data/vectorstore"   # 向量数据库存储路径

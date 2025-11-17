@@ -12,6 +12,9 @@ class DocumentType(str, Enum):
     TXT = "txt"
     MD = "md"
     ARXIV = "arxiv"
+    DOCX = "docx"
+    PPTX = "pptx"
+    EPUB = "epub"
 
 
 class Category(str, Enum):

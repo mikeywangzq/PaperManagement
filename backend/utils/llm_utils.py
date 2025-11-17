@@ -1,7 +1,9 @@
 """LLM and AI utilities."""
-from typing import Optional
+from typing import Optional, Union
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.llms import Ollama
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain.prompts import PromptTemplate
 
 from config.settings import settings
@@ -11,22 +13,44 @@ def get_llm(
     temperature: Optional[float] = None,
     model: Optional[str] = None,
     max_tokens: Optional[int] = None
-) -> ChatOpenAI:
-    """Get configured LLM instance."""
-    return ChatOpenAI(
-        model=model or settings.llm_model,
-        temperature=temperature or settings.temperature,
-        max_tokens=max_tokens or settings.max_tokens,
-        openai_api_key=settings.openai_api_key,
-    )
+) -> Union[ChatOpenAI, Ollama]:
+    """
+    Get configured LLM instance based on provider setting.
+
+    Supports both OpenAI and Ollama providers.
+    """
+    if settings.llm_provider == "ollama":
+        return Ollama(
+            model=model or settings.ollama_model,
+            base_url=settings.ollama_base_url,
+            temperature=temperature or settings.temperature,
+            num_predict=max_tokens or settings.max_tokens,
+        )
+    else:  # default to openai
+        return ChatOpenAI(
+            model=model or settings.llm_model,
+            temperature=temperature or settings.temperature,
+            max_tokens=max_tokens or settings.max_tokens,
+            openai_api_key=settings.openai_api_key,
+        )
 
 
-def get_embeddings() -> OpenAIEmbeddings:
-    """Get configured embeddings instance."""
-    return OpenAIEmbeddings(
-        model=settings.embedding_model,
-        openai_api_key=settings.openai_api_key,
-    )
+def get_embeddings() -> Union[OpenAIEmbeddings, OllamaEmbeddings]:
+    """
+    Get configured embeddings instance based on provider setting.
+
+    Supports both OpenAI and Ollama providers.
+    """
+    if settings.llm_provider == "ollama":
+        return OllamaEmbeddings(
+            model=settings.ollama_embedding_model,
+            base_url=settings.ollama_base_url,
+        )
+    else:  # default to openai
+        return OpenAIEmbeddings(
+            model=settings.embedding_model,
+            openai_api_key=settings.openai_api_key,
+        )
 
 
 # Prompt templates
