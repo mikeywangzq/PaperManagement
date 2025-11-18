@@ -1,4 +1,19 @@
-"""Summarizer module for generating paper summaries and key points."""
+"""
+论文总结模块 - 生成论文摘要和提取关键点
+
+Summarizer module for generating paper summaries and key points.
+
+核心功能 (Core Features):
+1. 生成摘要: 将长论文压缩为250-500字的简洁摘要
+2. 提取关键点: 以列表形式提取论文的核心要点
+3. 完整分析: 提取方法论、贡献、结论、数据集等
+4. 多语言: 支持中文和英文输出
+
+技术要点 (Technical Points):
+- 使用低温度(0.3)确保输出稳定和专注
+- 文本截断: 限制输入长度避免超过模型上下文窗口
+- 智能解析: 从LLM输出中解析结构化信息(列表、段落等)
+"""
 import json
 import logging
 from typing import List, Optional
@@ -15,11 +30,28 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    """Generate summaries and extract key points from papers."""
+    """
+    论文总结器 - 生成摘要和提取关键信息
+
+    Generate summaries and extract key points from papers.
+
+    设计原则 (Design Principles):
+    - 简洁性: 摘要控制在250-500字，突出核心内容
+    - 结构化: 将非结构化文本转换为结构化信息
+    - 准确性: 使用低温度参数确保输出稳定
+    """
 
     def __init__(self):
-        """Initialize summarizer."""
-        self.llm = get_llm(temperature=0.3)  # Lower temperature for more focused output
+        """
+        初始化总结器
+
+        Initialize summarizer.
+
+        配置说明 (Configuration):
+        - temperature=0.3: 低温度参数，输出更确定、更专注
+          (高温度会更有创造性但可能偏离主题)
+        """
+        self.llm = get_llm(temperature=0.3)  # 低温度确保输出稳定专注
         self.doc_processor = DocumentProcessor()
 
     def _truncate_text(self, text: str, max_tokens: int = 8000) -> str:
@@ -45,25 +77,38 @@ class Summarizer:
         language: str = "en"
     ) -> str:
         """
+        生成论文的简洁摘要
+
         Generate a concise summary of a paper.
 
+        处理流程 (Processing Flow):
+        1. 获取文档全文
+        2. 截断文本(如果超过8000 tokens)
+        3. 使用预定义提示模板调用LLM
+        4. 返回250-500字的摘要
+
+        提示工程 (Prompt Engineering):
+        - 明确要求摘要长度(250-500字)
+        - 指定包含的内容: 主要贡献、方法论、主要发现
+        - 指定输出语言(中文或英文)
+
         Args:
-            doc_id: Document ID
-            language: Output language (en or zh)
+            doc_id: 文档ID (Document ID)
+            language: 输出语言，"en"或"zh" (Output language)
 
         Returns:
-            Summary text (250-500 words)
+            摘要文本，250-500字 (Summary text, 250-500 words)
         """
         try:
-            # Get document text
+            # 获取文档文本
             text = self.doc_processor.get_document_text(doc_id)
             if not text:
                 raise ValueError(f"Document {doc_id} not found")
 
-            # Truncate if necessary
+            # 如果文本过长则截断(避免超过模型上下文限制)
             text = self._truncate_text(text)
 
-            # Generate summary
+            # 使用摘要提示模板生成摘要
             prompt = SUMMARY_PROMPT.format(text=text, language=language)
             summary = self.llm.predict(prompt)
 
@@ -80,39 +125,60 @@ class Summarizer:
         language: str = "en"
     ) -> List[str]:
         """
+        从论文中提取关键点
+
         Extract key points from a paper.
 
+        处理流程 (Processing Flow):
+        1. 获取文档全文并截断
+        2. 使用关键点提取提示模板
+        3. LLM返回项目符号列表
+        4. 解析并清理列表格式(去除符号、编号)
+
+        提示要求 (Prompt Requirements):
+        - 主要创新和贡献
+        - 重要发现
+        - 方法论亮点
+        - 实践意义
+
+        文本解析 (Text Parsing):
+        支持多种列表格式:
+        - 项目符号: -, *, •, ·
+        - 编号列表: 1. 2. 3.
+        自动清理格式保留纯文本
+
         Args:
-            doc_id: Document ID
-            language: Output language (en or zh)
+            doc_id: 文档ID (Document ID)
+            language: 输出语言 (Output language)
 
         Returns:
-            List of key points
+            关键点列表 (List of key points)
         """
         try:
-            # Get document text
+            # 获取文档文本
             text = self.doc_processor.get_document_text(doc_id)
             if not text:
                 raise ValueError(f"Document {doc_id} not found")
 
-            # Truncate if necessary
+            # 截断过长文本
             text = self._truncate_text(text)
 
-            # Extract key points
+            # 提取关键点
             prompt = KEY_POINTS_PROMPT.format(text=text, language=language)
             response = self.llm.predict(prompt)
 
-            # Parse bullet points
+            # 解析列表格式的关键点
             key_points = []
             for line in response.split('\n'):
                 line = line.strip()
-                # Remove bullet markers
+                # 移除项目符号
                 if line.startswith(('-', '*', '•', '·')):
                     line = line[1:].strip()
+                # 移除编号列表标记
                 elif line and line[0].isdigit() and '.' in line[:4]:
-                    # Remove numbered list markers
                     line = line.split('.', 1)[1].strip()
 
+                # 添加非空行
                 if line:
                     key_points.append(line)
 

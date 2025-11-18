@@ -1,4 +1,19 @@
-"""Classifier module for automatic document categorization and tagging."""
+"""
+文档分类模块 - 自动分类和标记文档
+
+Classifier module for automatic document categorization and tagging.
+
+核心功能 (Core Features):
+1. 自动分类: 将文档分类为机器学习、密码学或其他
+2. 标签提取: 从文档中识别相关技术标签
+3. 混合策略: 结合LLM智能分析和关键词匹配
+4. 统计分析: 提供分类和标签的统计信息
+
+分类策略 (Classification Strategy):
+- LLM分析: 理解语义，识别主题
+- 关键词匹配: 补充LLM遗漏的专业术语
+- 置信度评分: 评估分类的可信度
+"""
 import json
 import logging
 from typing import List, Dict, Any
@@ -12,14 +27,34 @@ logger = logging.getLogger(__name__)
 
 
 class Classifier:
-    """Automatically classify and tag documents."""
+    """
+    文档分类器 - 自动分类和标记文档
+
+    Automatically classify and tag documents.
+
+    工作原理 (How It Works):
+    1. LLM初步分析: 基于文档内容理解主题
+    2. 标签提取: LLM提取相关技术术语
+    3. 标签增强: 使用预定义词典补充遗漏的标签
+    4. 元数据更新: 将分类结果写入文档元数据
+    """
 
     def __init__(self):
-        """Initialize classifier."""
-        self.llm = get_llm(temperature=0.2)  # Low temperature for consistent classification
+        """
+        初始化分类器
+
+        Initialize classifier.
+
+        配置说明 (Configuration):
+        - temperature=0.2: 极低温度确保分类一致性
+          (分类任务需要稳定输出，不需要创造性)
+        - 预定义标签库: 为每个类别维护专业术语词典
+        """
+        self.llm = get_llm(temperature=0.2)  # 极低温度确保分类一致
         self.doc_processor = DocumentProcessor()
 
-        # Predefined topic tags for each category
+        # 为每个类别预定义主题标签词典
+        # 用于标签增强，补充LLM可能遗漏的专业术语
         self.category_tags = {
             Category.MACHINE_LEARNING: [
                 "CNN", "RNN", "LSTM", "GRU", "Transformer", "BERT", "GPT",
@@ -41,48 +76,69 @@ class Classifier:
 
     def classify_document(self, doc_id: str) -> ClassificationResult:
         """
+        对文档进行分类并提取标签
+
         Classify a document into a category and extract tags.
 
+        完整分类流程 (Complete Classification Flow):
+        1. 文本采样: 取前3000字符(足够识别主题，避免超限)
+        2. LLM分类: 调用LLM进行语义分析
+        3. JSON解析: 提取类别、标签、置信度
+        4. 标签增强: 使用关键词匹配补充标签
+        5. 元数据更新: 将结果写入文档元数据
+
+        为什么只用前3000字符 (Why First 3000 Characters):
+        - 论文的摘要和引言通常包含足够的主题信息
+        - 减少Token消耗，降低API成本
+        - 加快处理速度
+
+        容错处理 (Error Handling):
+        - JSON解析失败: 降级为"other"类别，置信度0.3
+        - 类别识别失败: 使用OTHER作为默认类别
+        - 完全失败: 抛出异常，由调用者处理
+
         Args:
-            doc_id: Document ID
+            doc_id: 文档ID (Document ID)
 
         Returns:
-            ClassificationResult with category, tags, and confidence
+            ClassificationResult对象，包含类别、标签、置信度
         """
         try:
-            # Get document text
+            # 获取文档文本
             text = self.doc_processor.get_document_text(doc_id)
             if not text:
                 raise ValueError(f"Document {doc_id} not found")
 
-            # Use first 3000 characters for classification
+            # 使用前3000字符进行分类(通常足够且节省成本)
             text_sample = text[:3000]
 
-            # Generate classification using LLM
+            # 使用LLM生成分类
             prompt = CLASSIFICATION_PROMPT.format(text=text_sample)
             response = self.llm.predict(prompt)
 
-            # Parse JSON response
+            # 解析JSON响应
             try:
                 result = json.loads(response.strip())
                 category_str = result.get("category", "other")
                 tags = result.get("tags", [])
                 confidence = result.get("confidence", 0.5)
             except json.JSONDecodeError:
+                # JSON解析失败时的降级处理
                 logger.warning(f"Failed to parse JSON response, using fallback classification")
                 category_str = "other"
                 tags = []
                 confidence = 0.3
 
-            # Convert category string to enum
+            # 将类别字符串转换为枚举
             try:
                 category = Category(category_str.lower())
             except ValueError:
                 category = Category.OTHER
 
-            # Enrich tags with keyword-based detection
+            # 使用关键词匹配增强标签
             enriched_tags = self._enrich_tags(text, category, tags)
 
+            # 构建分类结果
             classification = ClassificationResult(
                 document_id=doc_id,
                 category=category,
@@ -90,7 +146,7 @@ class Classifier:
                 confidence=confidence
             )
 
-            # Update document metadata
+            # 更新文档元数据
             self._update_document_metadata(doc_id, classification)
 
             logger.info(f"Classified document {doc_id} as {category.value} with {len(enriched_tags)} tags")
@@ -107,26 +163,40 @@ class Classifier:
         existing_tags: List[str]
     ) -> List[str]:
         """
+        使用关键词匹配增强标签
+
         Enrich tags with keyword-based detection.
 
+        增强策略 (Enrichment Strategy):
+        1. 保留LLM提取的标签(语义理解)
+        2. 遍历预定义标签库
+        3. 简单字符串匹配检测是否出现
+        4. 合并去重，限制数量
+
+        为什么需要增强 (Why Enrichment):
+        - LLM可能遗漏明显的专业术语
+        - 确保关键技术标签被捕获
+        - 提高标签的完整性
+
         Args:
-            text: Document text
-            category: Detected category
-            existing_tags: Tags from LLM
+            text: 文档文本 (Document text)
+            category: 检测到的类别 (Detected category)
+            existing_tags: LLM提取的标签 (Tags from LLM)
 
         Returns:
-            Enriched list of tags
+            增强后的标签列表(最多10个) (Enriched list of tags)
         """
-        tags = set(existing_tags)
+        tags = set(existing_tags)  # 使用集合自动去重
         text_lower = text.lower()
 
-        # Add tags based on keyword detection
+        # 根据类别匹配相应的标签库
         if category in self.category_tags:
             for tag in self.category_tags[category]:
+                # 简单字符串匹配(不区分大小写)
                 if tag.lower() in text_lower:
                     tags.add(tag)
 
-        # Limit to top 10 most relevant tags
+        # 限制为前10个最相关的标签(避免标签过多)
         return list(tags)[:10]
 
     def _update_document_metadata(
