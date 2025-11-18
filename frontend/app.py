@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import settings
 from frontend.i18n import t, language_selector
+from frontend.auth import check_authentication, login_page, display_user_info
 
 # Page configuration
 st.set_page_config(
@@ -16,6 +17,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Authentication check - MUST be before any other content
+if not check_authentication():
+    login_page()
+    st.stop()  # Stop execution if not authenticated
 
 # Custom CSS with responsive design
 st.markdown("""
@@ -88,8 +94,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Language selector
+# Language selector and user info
 language_selector()
+display_user_info()
 
 # Main content
 st.markdown(f'<h1 class="main-header">{t("app_title")}</h1>', unsafe_allow_html=True)

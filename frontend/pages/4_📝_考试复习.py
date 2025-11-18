@@ -10,8 +10,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from backend.core.review_helper import ReviewHelper
 from backend.core.document_processor import DocumentProcessor
 from backend.models.schemas import Category
+from frontend.auth import check_authentication, login_page
 
 st.set_page_config(page_title="考试复习", page_icon="📝", layout="wide")
+
+# Authentication check
+if not check_authentication():
+    login_page()
+    st.stop()
 
 # Initialize components
 @st.cache_resource

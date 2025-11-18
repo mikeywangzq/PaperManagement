@@ -2,13 +2,50 @@
 import streamlit as st
 import yaml
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 import hashlib
+import secrets
 
 
-def hash_password(password: str) -> str:
-    """Hash a password using SHA-256."""
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str, salt: str = None) -> Tuple[str, str]:
+    """
+    Hash a password using PBKDF2 with salt for better security.
+
+    Args:
+        password: Plain text password
+        salt: Optional salt (generated if not provided)
+
+    Returns:
+        Tuple of (hashed_password, salt)
+    """
+    if salt is None:
+        salt = secrets.token_hex(32)  # Generate 64-character hex salt
+
+    # Use PBKDF2 with SHA-256 and 100,000 iterations
+    password_hash = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100000  # Number of iterations
+    ).hex()
+
+    return password_hash, salt
+
+
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    """
+    Verify a password against a stored hash.
+
+    Args:
+        password: Plain text password to verify
+        stored_hash: Stored password hash
+        salt: Salt used for hashing
+
+    Returns:
+        True if password matches, False otherwise
+    """
+    computed_hash, _ = hash_password(password, salt)
+    return computed_hash == stored_hash
 
 
 def load_auth_config() -> Dict[str, Any]:
@@ -21,25 +58,30 @@ def load_auth_config() -> Dict[str, Any]:
     config_path = Path(__file__).parent.parent / "config" / "users.yaml"
 
     if not config_path.exists():
-        # Create default config if not exists
+        # Create default config with secure password hashing
+        admin_hash, admin_salt = hash_password("admin123")
+        demo_hash, demo_salt = hash_password("demo123")
+
         default_config = {
             "credentials": {
                 "usernames": {
                     "admin": {
                         "name": "Administrator",
-                        "password": hash_password("admin123"),  # Default password
+                        "password": admin_hash,
+                        "salt": admin_salt,
                         "role": "admin"
                     },
                     "demo": {
                         "name": "Demo User",
-                        "password": hash_password("demo123"),  # Default password
+                        "password": demo_hash,
+                        "salt": demo_salt,
                         "role": "user"
                     }
                 }
             },
             "cookie": {
                 "name": "ai_paper_management",
-                "key": "random_signature_key_123",
+                "key": secrets.token_hex(32),  # Generate random secure key
                 "expiry_days": 30
             },
             "preauthorized": {
@@ -86,11 +128,11 @@ def login_page():
     """
     Display login page and handle authentication.
 
+    Note: st.set_page_config() should be called by the main app before this function.
+
     Returns:
         True if authentication successful
     """
-    st.set_page_config(page_title="Login", page_icon="🔐", layout="centered")
-
     st.markdown("""
         <style>
         .login-container {
@@ -123,16 +165,39 @@ def login_page():
                 users = config["credentials"]["usernames"]
 
                 if username in users:
-                    stored_password = users[username]["password"]
-                    input_password_hash = hash_password(password)
+                    user_data = users[username]
+                    stored_hash = user_data["password"]
+                    salt = user_data.get("salt")
 
-                    if stored_password == input_password_hash:
+                    # Verify password
+                    password_valid = False
+
+                    if salt:
+                        # New PBKDF2 hash with salt
+                        password_valid = verify_password(password, stored_hash, salt)
+                    else:
+                        # Legacy SHA-256 hash (backward compatibility)
+                        legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+                        password_valid = (stored_hash == legacy_hash)
+
+                        if password_valid:
+                            # Upgrade to PBKDF2 on successful login
+                            new_hash, new_salt = hash_password(password)
+                            users[username]["password"] = new_hash
+                            users[username]["salt"] = new_salt
+
+                            # Save updated config
+                            config_path = Path(__file__).parent.parent / "config" / "users.yaml"
+                            with open(config_path, 'w') as f:
+                                yaml.dump(config, f, default_flow_style=False)
+
+                    if password_valid:
                         # Authentication successful
                         st.session_state.authentication_status = True
                         st.session_state.username = username
-                        st.session_state.name = users[username]["name"]
-                        st.session_state.role = users[username].get("role", "user")
-                        st.success(f"Welcome {users[username]['name']}!")
+                        st.session_state.name = user_data["name"]
+                        st.session_state.role = user_data.get("role", "user")
+                        st.success(f"Welcome {user_data['name']}!")
                         st.rerun()
                     else:
                         st.error("Incorrect password")

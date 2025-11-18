@@ -8,8 +8,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.core.learning_path import LearningPathGenerator
 from backend.models.schemas import Category
+from frontend.auth import check_authentication, login_page
 
 st.set_page_config(page_title="学习路线", page_icon="🗺️", layout="wide")
+
+# Authentication check
+if not check_authentication():
+    login_page()
+    st.stop()
 
 # Initialize components
 @st.cache_resource

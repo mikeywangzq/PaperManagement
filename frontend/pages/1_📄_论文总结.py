@@ -13,8 +13,14 @@ from backend.core.classifier import Classifier
 from backend.core.rag_engine import RAGEngine
 from backend.models.schemas import Query
 from config.settings import settings
+from frontend.auth import check_authentication, login_page, display_user_info
 
 st.set_page_config(page_title="论文总结", page_icon="📄", layout="wide")
+
+# Authentication check
+if not check_authentication():
+    login_page()
+    st.stop()
 
 # Initialize components
 @st.cache_resource

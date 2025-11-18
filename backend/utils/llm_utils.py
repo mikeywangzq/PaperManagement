@@ -1,5 +1,7 @@
 """LLM and AI utilities."""
 from typing import Optional, Union
+import requests
+import logging
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.llms import Ollama
@@ -8,6 +10,27 @@ from langchain.prompts import PromptTemplate
 
 from config.settings import settings
 
+logger = logging.getLogger(__name__)
+
+
+def check_ollama_connection(base_url: str, timeout: int = 5) -> bool:
+    """
+    Check if Ollama service is running and accessible.
+
+    Args:
+        base_url: Ollama service URL
+        timeout: Connection timeout in seconds
+
+    Returns:
+        True if Ollama is accessible, False otherwise
+    """
+    try:
+        response = requests.get(f"{base_url}/api/tags", timeout=timeout)
+        return response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Ollama connection check failed: {e}")
+        return False
+
 
 def get_llm(
     temperature: Optional[float] = None,
@@ -15,11 +38,28 @@ def get_llm(
     max_tokens: Optional[int] = None
 ) -> Union[ChatOpenAI, Ollama]:
     """
-    Get configured LLM instance based on provider setting.
+    Get configured LLM instance based on provider setting with connection validation.
 
     Supports both OpenAI and Ollama providers.
+
+    Raises:
+        ConnectionError: If Ollama service is not accessible
+        ValueError: If OpenAI API key is missing
     """
     if settings.llm_provider == "ollama":
+        # Validate Ollama connection
+        if not check_ollama_connection(settings.ollama_base_url):
+            raise ConnectionError(
+                f"无法连接到 Ollama 服务: {settings.ollama_base_url}\n\n"
+                f"请确保:\n"
+                f"1. Ollama 已安装 (访问 https://ollama.com)\n"
+                f"2. Ollama 服务正在运行: ollama serve\n"
+                f"3. 已下载所需模型: ollama pull {settings.ollama_model}\n"
+                f"4. 服务地址正确 (当前: {settings.ollama_base_url})\n\n"
+                f"或者切换到 OpenAI: 在 .env 中设置 LLM_PROVIDER=openai"
+            )
+
+        logger.info(f"Using Ollama LLM: {settings.ollama_model}")
         return Ollama(
             model=model or settings.ollama_model,
             base_url=settings.ollama_base_url,
@@ -27,6 +67,16 @@ def get_llm(
             num_predict=max_tokens or settings.max_tokens,
         )
     else:  # default to openai
+        # Validate OpenAI API key
+        if not settings.openai_api_key:
+            raise ValueError(
+                "未设置 OPENAI_API_KEY\n\n"
+                "请在 .env 文件中配置:\n"
+                "OPENAI_API_KEY=sk-your-api-key-here\n\n"
+                "或者切换到 Ollama: 在 .env 中设置 LLM_PROVIDER=ollama"
+            )
+
+        logger.info(f"Using OpenAI LLM: {settings.llm_model}")
         return ChatOpenAI(
             model=model or settings.llm_model,
             temperature=temperature or settings.temperature,
@@ -37,16 +87,38 @@ def get_llm(
 
 def get_embeddings() -> Union[OpenAIEmbeddings, OllamaEmbeddings]:
     """
-    Get configured embeddings instance based on provider setting.
+    Get configured embeddings instance based on provider setting with connection validation.
 
     Supports both OpenAI and Ollama providers.
+
+    Raises:
+        ConnectionError: If Ollama service is not accessible
+        ValueError: If OpenAI API key is missing
     """
     if settings.llm_provider == "ollama":
+        # Validate Ollama connection
+        if not check_ollama_connection(settings.ollama_base_url):
+            raise ConnectionError(
+                f"无法连接到 Ollama 服务: {settings.ollama_base_url}\n\n"
+                f"请确保 Ollama 服务正在运行并已下载嵌入模型:\n"
+                f"ollama pull {settings.ollama_embedding_model}\n\n"
+                f"或切换到 OpenAI: 在 .env 中设置 LLM_PROVIDER=openai"
+            )
+
+        logger.info(f"Using Ollama embeddings: {settings.ollama_embedding_model}")
         return OllamaEmbeddings(
             model=settings.ollama_embedding_model,
             base_url=settings.ollama_base_url,
         )
     else:  # default to openai
+        # Validate OpenAI API key
+        if not settings.openai_api_key:
+            raise ValueError(
+                "未设置 OPENAI_API_KEY\n\n"
+                "请在 .env 文件中配置 OpenAI API Key"
+            )
+
+        logger.info(f"Using OpenAI embeddings: {settings.embedding_model}")
         return OpenAIEmbeddings(
             model=settings.embedding_model,
             openai_api_key=settings.openai_api_key,

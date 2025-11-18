@@ -194,7 +194,7 @@ class DocumentProcessor:
 
     def process_epub(self, file_path: str) -> Dict[str, Any]:
         """
-        Extract text and metadata from EPUB file.
+        Extract text and metadata from EPUB file with safe metadata access.
 
         Args:
             file_path: Path to EPUB file
@@ -202,27 +202,51 @@ class DocumentProcessor:
         Returns:
             Dictionary containing text and metadata
         """
+        def safe_get_epub_metadata(book, dc_type: str, default=None):
+            """
+            Safely extract metadata from EPUB file.
+
+            Args:
+                book: EPUB book object
+                dc_type: Dublin Core metadata type
+                default: Default value if metadata not found
+
+            Returns:
+                Metadata value or default
+            """
+            try:
+                meta = book.get_metadata('DC', dc_type)
+                if meta and len(meta) > 0 and len(meta[0]) > 0:
+                    return meta[0][0]
+            except (IndexError, TypeError, AttributeError) as e:
+                logger.debug(f"Could not extract EPUB metadata '{dc_type}': {e}")
+            return default
+
         try:
             book = epub.read_epub(file_path)
             text_content = []
 
-            # Extract text from all items
+            # Extract text from all items with error handling
             for item in book.get_items():
-                if item.get_type() == epub.ITEM_DOCUMENT:
-                    # Parse HTML content
-                    soup = BeautifulSoup(item.get_content(), 'html.parser')
-                    text = soup.get_text(separator='\n', strip=True)
-                    if text:
-                        text_content.append(text)
+                try:
+                    if item.get_type() == epub.ITEM_DOCUMENT:
+                        # Parse HTML content
+                        soup = BeautifulSoup(item.get_content(), 'html.parser')
+                        text = soup.get_text(separator='\n', strip=True)
+                        if text:
+                            text_content.append(text)
+                except Exception as e:
+                    logger.warning(f"Failed to extract text from EPUB item: {e}")
+                    continue
 
             full_text = "\n\n".join(text_content)
 
-            # Extract metadata
+            # Extract metadata with safe access
             metadata = {
-                "title": book.get_metadata('DC', 'title')[0][0] if book.get_metadata('DC', 'title') else Path(file_path).stem,
-                "author": book.get_metadata('DC', 'creator')[0][0] if book.get_metadata('DC', 'creator') else None,
-                "language": book.get_metadata('DC', 'language')[0][0] if book.get_metadata('DC', 'language') else None,
-                "publisher": book.get_metadata('DC', 'publisher')[0][0] if book.get_metadata('DC', 'publisher') else None,
+                "title": safe_get_epub_metadata(book, 'title', Path(file_path).stem),
+                "author": safe_get_epub_metadata(book, 'creator'),
+                "language": safe_get_epub_metadata(book, 'language'),
+                "publisher": safe_get_epub_metadata(book, 'publisher'),
             }
 
             return {

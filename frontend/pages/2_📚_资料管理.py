@@ -13,8 +13,14 @@ from backend.core.document_processor import DocumentProcessor
 from backend.core.classifier import Classifier
 from backend.core.rag_engine import RAGEngine
 from backend.models.schemas import Category
+from frontend.auth import check_authentication, login_page
 
 st.set_page_config(page_title="资料管理", page_icon="📚", layout="wide")
+
+# Authentication check
+if not check_authentication():
+    login_page()
+    st.stop()
 
 # Initialize components
 @st.cache_resource
